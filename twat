@@ -8,47 +8,45 @@
 # gnuplot
 #
 # TO-DO:
-# * convert the mW output to W
-# * implement cleanup function (for the files /tmp/thinkwatt)
-# * write tp_smapi & possibly gnuplot check function
-# * buy grocieries
+# * clean-up function
+# * get rid of awk in the "for" loop in function record()
 
 # plotting variables {{{
 # information for gnuplot. this is the place where you can rename the x/y-labels on your graph, give the graph a custom title and such
-TITLE="power consumption of your thinkpad"
-XLABEL="seconds"
-YLABEL="mW"
+TITLE="power consumption of my thinkpad"
+XLABEL="sec (seconds)"
+YLABEL="W (Watt)"
 TERMINAL="png"
-TITLE1="original"
+TITLE1="real"
 TITLE2="trend"
-#TITLE3="average"
 #YRANGE="[4000:16000]"
 #XRANGE="[0:2000]"
 
-# twat will use $PLOTDIR to store the plt and png files created when called with -p
-PLOTDIR="/tmp/thinkwatt"
-PLOTFILE="$PLOTDIR/$$.plt"
-PNGFILE="$PLOTDIR/$$.png"
+# use $DIR to have twat save files in a different directory.
+# twat will save two files:
+# 1) a .plt file (containing plot instructions)
+# 2) a .png file (the plot graphic)
+TDIR="/tmp/thinkwatt"
+PLOTFILE="$TDIR/$$.plt"
+PNGFILE="$TDIR/$$.png"
 # }}}
 
 # utilities {{{
 message() {
   cat << EOF
-usage:	thinkwatt [ -r <seconds> | -c | -p ] file
+usage:	thinkwatt [ -r <seconds> | -p | -a ] file
 
 options:	
 	-r, --record	start recording the power consumption
-	-c, --calc	calculate the average power consumption
 	-p, --plot	create a plot image
+	-a, --average	calculate the average power consumption
 	-h, --help	show this help text
 	
 examples:
 	thinkwatt -r 300 consumption.dat
-	thinkwatt -r 60 /home/youruser/document_folder/consumption.dat
+	thinkwatt -r 60 /foo/bar/consumption.dat
 	
-notes:
-	thinkwatt requires the kernel module tp_smapi to be enabled.
-	if you want to use the --plot function you also need gnuplot.
+	thinkwatt -p /foo/bar/consumption.dat
 EOF
   exit 1
 }
@@ -56,36 +54,60 @@ EOF
 errorout() { echo "error: $*" >&2; exit 1; }
 # }}}
 
+[[ -z $(lsmod | grep smapi) ]] && errorout 'you need to load the kernel module tp_smapi first.'
+
 # record {{{
 record() {
-  local seconds
-  seconds=$1
   
-  [[ "$seconds" =~ ^[0-9]+$ ]] || errorout "$1 is not a number"
+  [[ "$1" =~ ^[0-9]+$ ]] || errorout "$1 is not a number"
   [[ "$2" ]] || errorout "you have to specify an output file"
   
   local BAT=/sys/devices/platform/smapi/BAT0
   
-  local file dir
-
-  file=$(basename "$2")
-  dir=$(dirname "$2")
-
-  [[ -d "$dir" ]] || mkdir -p "$dir"
-  [[ -z "$dir" ]] && touch "$file" || touch "$2"
+  local tmpfile
+  tmpfile=/tmp/$$.dat
+  
+  if [[ -f $2 ]];then
+    echo 
+    echo "$2 already exists. It will be overwritten."
+    echo "You'll be asked to confirm that later by /bin/mv."
+    echo 
+  fi
+  
+  touch "$tmpfile"
 
   echo "recording power consumption for the next $1 seconds in $2"
   
-  for ((i=0; i<=$seconds; i++));do
+  for ((i=0; i<=$1; i++));do
     sleep 1
-    cat $BAT/power_now >> "$2"
+    cat $BAT/power_now | awk '{print $1/1000}' >> "$tmpfile"
   done
+
+  # we strip the leading "-" from the data file
+  sed -i 's/-//g' "$tmpfile"
+  
+  # create $2 and move 
+  local dir #file
+
+  #file=$(basename "$2")
+  dir=$(dirname "$2")
+  
+  [[ -d "$dir" ]] || mkdir -p "$dir"
+  
+  mv -i "$tmpfile" "$2"
+  
+  echo 
+  echo "-------------------------------------------------------"
+  echo "average consumption during the last $1 seconds was $(average $2) W"
+  echo "-------------------------------------------------------"
+  echo
+
 }
 # }}}
 
-# calc {{{
-calc() {
-  awk 'BEGIN{s=0;}{s+=(-$1);}END{print s/NR;}' "$@"
+# calculate average {{{
+average() {
+  awk 'BEGIN{s=0;}{s+=($1);}END{print s/NR;}' "$@"
 }
 # }}}
 
@@ -105,21 +127,33 @@ set output "$PNGFILE"
 #set yrange "$YRANGE"
 #set xrange "$XRANGE"
 EOF
-echo "plot \"$datafile\" using (-\$1) with lines title \"$TITLE1\" lt 2, \
-\"$datafile\" using (-\$1) smooth bezier title \"$TITLE2\" lt 1"
+echo "plot \"$datafile\" using (\$1) with lines title \"$TITLE1\" lt 2, \
+\"$datafile\" using (\$1) smooth bezier title \"$TITLE2\" lt 1, \
+$avg title \"average ($avg W)\""
 
 }
 # }}}
 
 # do the plotting
 plot() {
+
+  [[ -z $(find $(sed 's/:/ /g' <<<$PATH) 2>/dev/null | grep -is gnuplot) ]] && errorout 'you have to install gnuplot first'
+ 
   local datafile
   datafile=$1
   
-  [[ -d $PLOTDIR ]] || mkdir -p $PLOTDIR  
+  [[ $datafile ]] || errorout 'please specify a file to read from.'
+   
+  avg=$(average $datafile | cut -c1-4)
+  
+  [[ -d $TDIR ]] || mkdir -p $TDIR 
   makeplotfile > "$PLOTFILE" || errorout 'failed writing plotfile'
   gnuplot -p "$PLOTFILE"
+  echo 
+  echo "------------------------------------------"
   echo "the gnuplot graph has been created as $PNGFILE"
+  echo "------------------------------------------"
+  echo 
 
 }
 
@@ -130,11 +164,11 @@ parse_options() {
 
   while [[ -n "$1" ]]; do
     case "$1" in
-      -r|--record)  mode='record'      ;;
-      -c|--calc)    mode='calc'        ;;
-      -p|--plot)    mode='plot'        ;;
-      -h|--help)    message            ;;
-      *)            args+=( "$1" )     ;;
+      -r|--record)  mode='record'	;;
+      -p|--plot)    mode='plot'		;;
+      -a|--average) mode='average'	;;
+      -h|--help)    message		;;
+      *)            args+=( "$1" )	;;
     esac
     shift
   done
@@ -145,10 +179,10 @@ parse_options() {
 main() {
 
   case "$mode" in
-    record) record "${args[@]}"	 ;;
-    calc) calc "${args[@]}"	 ;;
-    plot) plot "${args[@]}"	 ;;
-    *)   errorout 'invalid mode' ;;
+    record)  record "${args[@]}"	;;
+    average) average "${args[@]}"	;;
+    plot)    plot "${args[@]}"		;;
+    *)       errorout 'invalid mode'	;;
   esac
   
 }
