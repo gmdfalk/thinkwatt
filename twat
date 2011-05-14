@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+#
+# twat (thinkwatt):
+# record power consumption, calculate average and create a gnuplot graph
+#
+
+# plotting variables {{{
+# information for gnuplot. this is the place where you can rename the x/y-labels on your graph, give the graph a custom title and such
+TITLE="power consumption of your thinkpad"
+XLABEL="seconds"
+YLABEL="mW"
+TERMINAL="png"
+TITLE1="original"
+TITLE2="trend"
+#TITLE3="average"
+#YRANGE="[4000:16000]"
+#XRANGE="[0:2000]"
+
+# twat will use $PLOTDIR to store the plt and png files created when called with -p
+PLOTDIR="/tmp/thinkwatt"
+PLOTFILE="$PLOTDIR/$$.plt"
+PNGFILE="$PLOTDIR/$$.png"
+# }}}
+
+# utilities {{{
+message() {
+  cat << EOF
+usage:	thinkwatt [ -r <seconds> | -c | -p ] file
+
+options:	
+	-r, --record	start recording the power consumption
+	-c, --calc	calculate the average power consumption
+	-p, --plot	create a plot image
+	-h, --help	show this help text
+	
+examples:
+	thinkwatt -r 300 consumption.dat
+	thinkwatt -r 60 /home/youruser/document_folder/consumption.dat
+EOF
+  exit 1
+}
+
+errorout() { echo "error: $*" >&2; exit 1; }
+# }}}
+
+# record {{{
+record() {
+  local seconds
+  seconds=$1
+  
+  [[ "$seconds" =~ ^[0-9]+$ ]] || errorout "$1 is not a number"
+  [[ "$2" ]] || errorout "you have to specify an output file"
+  
+  local BAT=/sys/devices/platform/smapi/BAT0
+  
+  local file dir
+
+  file=$(basename "$2")
+  dir=$(dirname "$2")
+
+  [[ -d "$dir" ]] || mkdir -p "$dir"
+  [[ -z "$dir" ]] && touch "$file" || touch "$2"
+
+  echo "recording power consumption for the next $1 seconds in $2"
+  
+  for ((i=0; i<=$seconds; i++));do
+    sleep 1
+    cat $BAT/power_now >> "$2"
+  done
+}
+# }}}
+
+# calc {{{
+calc() {
+  awk 'BEGIN{s=0;}{s+=(-$1);}END{print s/NR;}' "$@"
+}
+# }}}
+
+# make the plot file {{{
+makeplotfile() {
+
+  cat << EOF
+# gnuplot file
+# created by thinkwatt
+# $(date +%Y-%m-%d\ %T)
+
+set title "$TITLE"
+set xlabel "$XLABEL"
+set ylabel "$YLABEL"
+set terminal "$TERMINAL"
+set output "$PNGFILE"
+#set yrange "$YRANGE"
+#set xrange "$XRANGE"
+EOF
+echo "plot \"$datafile\" using (-\$1) with lines title \"$TITLE1\" lt 2, \
+\"$datafile\" using (-\$1) smooth bezier title \"$TITLE2\" lt 1"
+
+}
+# }}}
+
+# do the plotting
+plot() {
+  local datafile
+  datafile=$1
+  
+  [[ -d $PLOTDIR ]] || mkdir -p $PLOTDIR  
+  makeplotfile > "$PLOTFILE" || errorout 'failed writing plotfile'
+  gnuplot -p "$PLOTFILE"
+  echo "the gnuplot graph has been created as $PNGFILE"
+
+}
+
+# parse options {{{
+parse_options() {
+
+  [[ -z "$1" ]] && message
+
+  while [[ -n "$1" ]]; do
+    case "$1" in
+      -r|--record)  mode='record'      ;;
+      -c|--calc)    mode='calc'        ;;
+      -p|--plot)    mode='plot'        ;;
+      -h|--help)    message            ;;
+      *)            args+=( "$1" )     ;;
+    esac
+    shift
+  done
+}
+# }}}
+
+# main {{{
+main() {
+
+  case "$mode" in
+    record) record "${args[@]}"	 ;;
+    calc) calc "${args[@]}"	 ;;
+    plot) plot "${args[@]}"	 ;;
+    *)   errorout 'invalid mode' ;;
+  esac
+  
+}
+# }}}
+
+parse_options "$@"
+main
