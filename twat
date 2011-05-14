@@ -3,6 +3,15 @@
 # twat (thinkwatt):
 # record power consumption, calculate average and create a gnuplot graph
 #
+# requires:
+# tp_smapi (kernel module)
+# gnuplot
+#
+# TO-DO:
+# * convert the mW output to W
+# * implement cleanup function (for the files /tmp/thinkwatt)
+# * write tp_smapi & possibly gnuplot check function
+# * buy grocieries
 
 # plotting variables {{{
 # information for gnuplot. this is the place where you can rename the x/y-labels on your graph, give the graph a custom title and such
@@ -36,6 +45,10 @@ options:
 examples:
 	thinkwatt -r 300 consumption.dat
 	thinkwatt -r 60 /home/youruser/document_folder/consumption.dat
+	
+notes:
+	thinkwatt requires the kernel module tp_smapi to be enabled.
+	if you want to use the --plot function you also need gnuplot.
 EOF
   exit 1
 }

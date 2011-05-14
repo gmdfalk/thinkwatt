@@ -1,2 +1,9 @@
 Thinkwatt is a bash script for use with thinkpad laptops.
-It lets you record your power consumption, calculate an average as well as visualize that data in a 2D-Gnuplot Graph.
+It lets you 
+ * record your power consumption,
+ * calculate an average of that consumption
+ * and visualize that data in a 2D gnuplot graphic.
+
+Thinkwatt only works on thinkpads laptops.
+It requires the kernel module "tp_smapi" to be installed and loaded.
+For the creation of a 2D graph "gnuplot" needs to be installed on the system, too.
