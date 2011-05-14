@@ -1,0 +1,2 @@
+Thinkwatt is a bash script for use with thinkpad laptops.
+It lets you record your power consumption, calculate an average as well as visualize that data in a 2D-Gnuplot Graph.
