@@ -19,10 +19,11 @@ YLABEL="W (Watt)"
 TERMINAL="png"
 TITLE1="real"
 TITLE2="trend"
+# if you want to set a specific range for x/y-axis do it here:
 #YRANGE="[4000:16000]"
 #XRANGE="[0:2000]"
 
-# use $DIR to have twat save files in a different directory.
+# use $TDIR to have twat save files in a different directory.
 # twat will save two files:
 # 1) a .plt file (containing plot instructions)
 # 2) a .png file (the plot graphic)
@@ -54,18 +55,23 @@ EOF
 errorout() { echo "error: $*" >&2; exit 1; }
 # }}}
 
-[[ -z $(lsmod | grep smapi) ]] && errorout 'you need to load the kernel module tp_smapi first.'
+[[ -z $(lsmod | grep smapi) ]] && errorout 'please load the kernel module tp_smapi first.'
 
 # record {{{
 record() {
+
+  local seconds
+  seconds="$1"
   
-  [[ "$1" =~ ^[0-9]+$ ]] || errorout "you have to specify a numerical argument for -r."
-  [[ "$2" ]] || errorout "you have to specify an output file"
+  local datafile
+  datafile="$2"
   
+  [[ "$seconds" =~ ^[0-9]+$ ]] || errorout "please specify the time in seconds."
+  [[ "$datafile" ]] || errorout 'please specify a file to write to.'
+
   local BAT=/sys/devices/platform/smapi/BAT0
   
-  if [[ -f $2 ]];then
-    echo "--------------------------------"
+  if [[ -f "$datafile" ]];then
     read -p "Overwrite $2? y/n "
     [[ "$REPLY" = "y" ]] || exit 0      
   fi
@@ -73,14 +79,13 @@ record() {
   local tmpfile
   tmpfile=/tmp/$$.dat
   
-  echo "--------------------------------------------------"
-  echo "recording power consumption for the next $1 seconds"
+  echo "recording power consumption for the next $seconds seconds"
   
   touch "$tmpfile"
   
-  for ((i=0; i<=$1; i++));do
+  for ((i=0; i<=$seconds; i++));do
     sleep 1
-    cat $BAT/power_now | awk '{print $1/1000}' >> "$tmpfile"
+    cat "$BAT"/power_now | awk '{print $1/1000}' >> "$tmpfile"
   done
 
   # we strip the leading "-" from the data file
@@ -94,10 +99,11 @@ record() {
   
   [[ -d "$dir" ]] || mkdir -p "$dir"
   
-  mv "$tmpfile" "$2" && echo "succesfully written to $2"
-  echo "--------------------------------------------------"
-  echo "average consumption during the last $1 seconds was $(average $2) W"
-  echo 
+  mv "$tmpfile" "$datafile" && echo "recorded data succesfully written to $datafile"
+  echo "average consumption during the last $seconds seconds was $(average $datafile) W"
+  
+  read -p "Do you want to create a graphic now, too? y/n "
+  [[ "$REPLY" = "y" ]] && plot $2 || exit 0
 
 }
 # }}}
@@ -106,9 +112,11 @@ record() {
 average() {
 
   local datafile
-  datafile="$1"
+  datafile="$@"
   
-  [[ $datafile ]] || errorout 'please specify a file to read from.'
+  [[ "$datafile" ]] || errorout 'please specify a file to read from.'
+  [[ -f "$datafile" ]] || errorout 'file not found.'
+  
   awk 'BEGIN{s=0;}{s+=($1);}END{print s/NR;}' "$datafile"
 }
 # }}}
@@ -124,12 +132,13 @@ makeplotfile() {
 set title "$TITLE"
 set xlabel "$XLABEL"
 set ylabel "$YLABEL"
-set terminal "$TERMINAL"
+set terminal $TERMINAL
 set output "$PNGFILE"
-#set yrange "$YRANGE"
-#set xrange "$XRANGE"
 EOF
-echo "plot \"$datafile\" using (\$1) with lines title \"$TITLE1\" lt 2, \
+[[ $YRANGE ]] && echo "set yrange $YRANGE"
+[[ $XRANGE ]] && echo "set yrange $YRANGE"
+echo 
+echo "plot \"$(pwd)/$datafile\" using (\$1) with lines title \"$TITLE1\" lt 2, \
 \"$datafile\" using (\$1) smooth bezier title \"$TITLE2\" lt 1, \
 $avg title \"average ($avg W)\""
 
@@ -142,18 +151,17 @@ plot() {
   [[ -z $(find $(sed 's/:/ /g' <<<$PATH) 2>/dev/null | grep -is gnuplot) ]] && errorout 'you have to install gnuplot first'
  
   local datafile
-  datafile=$1
+  datafile="$@"
   
-  [[ $datafile ]] || errorout 'please specify a file to read from.'
+  [[ "$datafile" ]] || errorout 'please specify a file to read from.'
+  [[ -f "$datafile" ]] || errorout 'file not found.'
    
-  avg=$(average $datafile | cut -c1-4)
+  avg=$(average "$datafile" | cut -c1-4)
   
-  [[ -d $TDIR ]] || mkdir -p $TDIR 
+  [[ -d "$TDIR" ]] || mkdir -p "$TDIR"
   makeplotfile > "$PLOTFILE" || errorout 'failed writing plotfile'
-  gnuplot -p "$PLOTFILE"
-  echo "------------------------------------------"
+  gnuplot "$PLOTFILE"
   echo "graph created as $PNGFILE"
-  echo 
 
 }
 
