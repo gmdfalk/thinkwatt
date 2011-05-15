@@ -40,6 +40,7 @@ usage:	thinkwatt [ -r <seconds> | -p | -a ] file
 
 options:	
 	-r, --record	start recording the power consumption; optional: specify output file
+			once the file is recorded you'll have the option to directly create a gnuplot graph from it
 	-p, --plot	create a plot image from a data file
 	-a, --average	calculate the average power consumption from a data file
 	-h, --help	show this help text

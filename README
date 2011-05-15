@@ -3,6 +3,18 @@ It lets you
  * record your power consumption,
  * calculate an average of that consumption
  * and visualize that data in a 2D gnuplot graphic.
+ 
+usage:	thinkwatt [ -r <seconds> | -p | -a ] file
 
-Thinkwatt currently only works on thinkpads laptops as it requires the kernel module "tp_smapi" to be installed and loaded.
+options:
+	-r, --record	start recording the power consumption
+			once the file is recorded you'll have the option to directly create a gnuplot graph from it
+	-p, --plot	create a gnuplot image from a data file
+	-a, --average	calculate the average power consumption from a data file
+	-h, --help	show this help text
+examples:
+	thinkwatt -r 300 /foo/bar/consumption.dat
+	thinkwatt -r 900
+	
+Thinkwatt currently *only* works on thinkpads laptops as it requires the kernel module "tp_smapi" to be installed and loaded.
 For the creation of a 2D graph "gnuplot" needs to be installed on the system, too.
