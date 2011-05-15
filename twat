@@ -105,7 +105,7 @@ record() {
   echo "average consumption during the last $seconds seconds was $(average $outputfile) W"
   
   read -p "Do you want to create a graphic now, too? y/n "
-  [[ "$REPLY" = "y" ]] && plot $datafile || exit 0
+  [[ "$REPLY" = "y" ]] && plot "$outputfile" || exit 0
 
 }
 # }}}
