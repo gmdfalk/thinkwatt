@@ -9,17 +9,26 @@
 #
 # TO-DO:
 # * clean-up function
-# * get rid of awk in the "for" loop in function record()
+# * support for non-thinkpads via /proc/acpi/battery (gotta find the /sys equivalent for that too)
+# * add options for PNG output dir
+# * add option for modifying title, e.g. with twat -t|--title
+# * make output name per default the same as input name (?)
+# * check if AC is plugged in
 
 # plotting variables {{{
+# powerfile - if you use an ultrabay accu and have no main accu plugged in you might need to change BAT0 to BAT1
+# this is also a preparation for non-thinkpad support
+POWERFILE=/sys/devices/platform/smapi/BAT0/power_now
 # information for gnuplot. this is the place where you can rename the x/y-labels on your graph, give the graph a custom title and such
-TITLE="power consumption of my thinkpad, created by thinkwatt on $(date +%Y-%m-%d\ %T)"
+DATE=$(date +%Y-%m-%d,\ %T)
+TITLE="power consumption of my thinkpad, created by thinkwatt on $DATE"
 XLABEL="sec (seconds)"
 YLABEL="W (Watt)"
 TERMINAL="png"
 # if you'd like custom titles for the graphs, here's where you do it
-#TITLE1="real"
-#TITLE2="trend"
+#TITLE1="your custom title for line1"
+#TITLE2="for line2"
+#TITLE3="for line 3"
 # if you want to set a specific range for x/y-axis do it below
 #YRANGE="[4000:16000]"
 #XRANGE="[0:2000]"
@@ -30,7 +39,7 @@ TERMINAL="png"
 # 2) a .png file (the plot graphic)
 TDIR="/tmp/thinkwatt"
 PLOTFILE="$TDIR/$$.plt"
-PNGFILE="$TDIR/$$.png"
+PNGFILE=$$.png
 # }}}
 
 # utilities {{{
@@ -71,27 +80,26 @@ record() {
     read -p "overwrite $datafile? y/n "
     [[ "$REPLY" = "y" ]] || exit 0
   fi
-  
-  local bat=/sys/devices/platform/smapi/BAT0
-  
-  local tmpfile=/tmp/$$.dat
-  
-  touch "$tmpfile"
+
+  local tmpfile1=/tmp/$$.dat
+  touch "$tmpfile1"
   
   echo "recording power consumption for the next $seconds seconds"
   
   for ((i=0; i<=$seconds; i++));do
     sleep 1
-    cat "$bat"/power_now | awk '{print $1/1000}' >> "$tmpfile"
+    cat "$POWERFILE" >> "$tmpfile1"
   done
 
   # we strip the leading "-" from the data file
-  sed -i 's/-//g' "$tmpfile"
+  sed -i 's/-//g' "$tmpfile1"
+  
+  local tmpfile=$TDIR/$$.dat
+  cat "$tmpfile1" | awk '{print $1/1000}' > "$tmpfile"
   
   if [[ $datafile ]];then
-
-    local dir=$(dirname "$2")
-    # local file=$(basename "$2")
+    local dir=$(dirname "$datafile")
+    local file=$(basename "$datafile")
 
     [[ -d "$dir" ]] || mkdir -p "$dir"
     
@@ -99,13 +107,16 @@ record() {
   
     mv "$tmpfile" "$datafile" && echo "recorded data succesfully written to $datafile"
   else
+    local file=$(basename "$tmpfile")
     outputfile="$tmpfile"
   fi
   
   echo "average consumption during the last $seconds seconds was $(average $outputfile) W"
   
-  read -p "Do you want to create a graphic now, too? y/n "
+  read -p "do you want to create a graphic now, too? y/n "
   [[ "$REPLY" = "y" ]] && plot "$outputfile" || exit 0
+  
+  cleanup
 
 }
 # }}}
@@ -113,15 +124,17 @@ record() {
 # calculate average {{{
 average() {
 
-  local datafile
-  datafile="$@"
+  [[ "$@" ]] || errorout 'please specify a file to read from.'
+  [[ -f "$@" ]] || errorout 'file not found.'
   
-  [[ "$datafile" ]] || errorout 'please specify a file to read from.'
-  [[ -f "$datafile" ]] || errorout 'file not found.'
-  
-  awk 'BEGIN{s=0;}{s+=($1);}END{print s/NR;}' "$datafile"
+  awk 'BEGIN{s=0;}{s+=($1);}END{print s/NR;}' "$@"
 }
 # }}}
+
+# cleanup {{{
+cleanup() { # clean up at least some of the mess i make :P
+  rm "$tmpfile1"
+}
 
 # make the plot file {{{
 makeplotfile() {
@@ -129,7 +142,7 @@ makeplotfile() {
   cat << EOF
 # gnuplot file
 # created by thinkwatt
-# $(date +%Y-%m-%d\ %T)
+# $DATE
 
 set title "$TITLE"
 set xlabel "$XLABEL"
@@ -141,20 +154,26 @@ EOF
 [[ $XRANGE ]] && echo "set yrange $YRANGE"
 echo 
 if [[ $TITLE1 ]];then
-  echo "plot \"$datafile\" using (\$1) with lines title \"$TITLE1\" lt 2, \\"
+  echo "plot \"$datfile\" using (\$1) with lines title \"$TITLE1\" lt 2, \\"
 else
-  echo "plot \"$datafile\" using (\$1) with lines lt 2, \\"
+  echo "plot \"$datfile\" using (\$1) with lines lt 2, \\"
 fi
 
 if [[ $TITLE2 ]];then
-  echo "\"$datafile\" using (\$1) smooth bezier title \"$TITLE2\" lt 1, \\"
+  if [[ $avg ]];then
+    echo "\"$datfile\" using (\$1) smooth bezier title \"$TITLE2\" lt 1, \\"
+  else
+    echo "\"$datfile\" using (\$1) smooth bezier title \"$TITLE2\" lt 1"
+  fi
 else
-  echo "\"$datafile\" using (\$1) smooth bezier lt 1, \\"
+  if [[ $avg ]];then
+    echo "\"$datfile\" using (\$1) smooth bezier lt 1, \\"
+  else
+    echo "\"$datfile\" using (\$1) smooth bezier lt 1"
+  fi
 fi
 
-if [[ $avg ]];then
-  echo "$avg title \"average ($avg W)\""
-fi
+[[ $avg ]] && echo "$avg title \"$file (average, $avg W)\""
 
 }
 # }}}
@@ -164,20 +183,25 @@ plot() {
 
   [[ -z $(find $(sed 's/:/ /g' <<<$PATH) 2>/dev/null | grep -is gnuplot) ]] && errorout 'you have to install gnuplot first'
  
-  local datafile
-  datafile="$@"
+  local datfile="$@"
   
-  local dir=$(dirname "$datafile")
-  
-  [[ "$datafile" ]] || errorout 'please specify a file to read from.'
-  [[ -f "$datafile" ]] || errorout 'file not found.'
+  local dir=$(dirname "$datfile")
+  local file=$(basename "$datfile")
+
+  [[ "$datfile" ]] || errorout 'please specify a file to read from.'
+  [[ -f "$datfile" ]] || errorout 'file not found.'
+
+  [[ -z $TITLE1 ]] && local TITLE1="$file (actual)"
+  [[ -z $TITLE2 ]] && local TITLE2="$file (trend)"
    
-  local avg=$(average "$datafile" | cut -c1-4)
+  local avg=$(average "$datfile" | cut -c1-4)
   
   [[ -d "$TDIR" ]] || mkdir -p "$TDIR"
   makeplotfile > "$PLOTFILE" || errorout 'failed writing plotfile'
   gnuplot "$PLOTFILE"
-  echo "graph created as $PNGFILE"
+
+  echo "done. you can find the plot file in $TDIR"
+  echo "graph saved in current working directory as $PNGFILE"
 
 }
 
