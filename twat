@@ -13,19 +13,20 @@
 
 # plotting variables {{{
 # information for gnuplot. this is the place where you can rename the x/y-labels on your graph, give the graph a custom title and such
-TITLE="power consumption of my thinkpad"
+TITLE="power consumption of my thinkpad, created by thinkwatt on $(date +%Y-%m-%d\ %T)"
 XLABEL="sec (seconds)"
 YLABEL="W (Watt)"
 TERMINAL="png"
-TITLE1="real"
-TITLE2="trend"
-# if you want to set a specific range for x/y-axis do it here:
+# if you'd like custom titles for the graphs, here's where you do it
+#TITLE1="real"
+#TITLE2="trend"
+# if you want to set a specific range for x/y-axis do it below
 #YRANGE="[4000:16000]"
 #XRANGE="[0:2000]"
 
 # use $TDIR to have twat save files in a different directory.
 # twat will save two files:
-# 1) a .plt file (containing plot instructions)
+# 1) a .plt file (containing plot instructions) in case you want to reuse/modify it
 # 2) a .png file (the plot graphic)
 TDIR="/tmp/thinkwatt"
 PLOTFILE="$TDIR/$$.plt"
@@ -38,16 +39,14 @@ message() {
 usage:	thinkwatt [ -r <seconds> | -p | -a ] file
 
 options:	
-	-r, --record	start recording the power consumption
-	-p, --plot	create a plot image
-	-a, --average	calculate the average power consumption
+	-r, --record	start recording the power consumption; optional: specify output file
+	-p, --plot	create a plot image from a data file
+	-a, --average	calculate the average power consumption from a data file
 	-h, --help	show this help text
 	
 examples:
-	thinkwatt -r 300 consumption.dat
-	thinkwatt -r 60 /foo/bar/consumption.dat
-	
-	thinkwatt -p /foo/bar/consumption.dat
+	thinkwatt -r 300 /foo/bar/consumption.dat
+	thinkwatt -r 900
 EOF
   exit 1
 }
@@ -55,55 +54,57 @@ EOF
 errorout() { echo "error: $*" >&2; exit 1; }
 # }}}
 
-[[ -z $(lsmod | grep smapi) ]] && errorout 'please load the kernel module tp_smapi first.'
+[[ $(lsmod | grep smapi) ]] || errorout 'please load the kernel module tp_smapi first.'
 
 # record {{{
 record() {
 
-  local seconds
-  seconds="$1"
+  local seconds="$1"
   
-  local datafile
-  datafile="$2"
+  local datafile="$2"
   
   [[ "$seconds" =~ ^[0-9]+$ ]] || errorout "please specify the time in seconds."
-  [[ "$datafile" ]] || errorout 'please specify a file to write to.'
-
-  local BAT=/sys/devices/platform/smapi/BAT0
+  #[[ "$datafile" ]] || errorout 'please specify a file to write to.'
   
   if [[ -f "$datafile" ]];then
-    read -p "Overwrite $2? y/n "
-    [[ "$REPLY" = "y" ]] || exit 0      
+    read -p "overwrite $datafile? y/n "
+    [[ "$REPLY" = "y" ]] || exit 0
   fi
   
-  local tmpfile
-  tmpfile=/tmp/$$.dat
+  local bat=/sys/devices/platform/smapi/BAT0
   
-  echo "recording power consumption for the next $seconds seconds"
+  local tmpfile=/tmp/$$.dat
   
   touch "$tmpfile"
   
+  echo "recording power consumption for the next $seconds seconds"
+  
   for ((i=0; i<=$seconds; i++));do
     sleep 1
-    cat "$BAT"/power_now | awk '{print $1/1000}' >> "$tmpfile"
+    cat "$bat"/power_now | awk '{print $1/1000}' >> "$tmpfile"
   done
 
   # we strip the leading "-" from the data file
   sed -i 's/-//g' "$tmpfile"
   
-  # create $2 and move 
-  local dir #file
+  if [[ $datafile ]];then
 
-  #file=$(basename "$2")
-  dir=$(dirname "$2")
+    local dir=$(dirname "$2")
+    # local file=$(basename "$2")
+
+    [[ -d "$dir" ]] || mkdir -p "$dir"
+    
+    outputfile="$datafile"
   
-  [[ -d "$dir" ]] || mkdir -p "$dir"
+    mv "$tmpfile" "$datafile" && echo "recorded data succesfully written to $datafile"
+  else
+    outputfile="$tmpfile"
+  fi
   
-  mv "$tmpfile" "$datafile" && echo "recorded data succesfully written to $datafile"
-  echo "average consumption during the last $seconds seconds was $(average $datafile) W"
+  echo "average consumption during the last $seconds seconds was $(average $outputfile) W"
   
   read -p "Do you want to create a graphic now, too? y/n "
-  [[ "$REPLY" = "y" ]] && plot $2 || exit 0
+  [[ "$REPLY" = "y" ]] && plot $datafile || exit 0
 
 }
 # }}}
@@ -138,9 +139,21 @@ EOF
 [[ $YRANGE ]] && echo "set yrange $YRANGE"
 [[ $XRANGE ]] && echo "set yrange $YRANGE"
 echo 
-echo "plot \"$(pwd)/$datafile\" using (\$1) with lines title \"$TITLE1\" lt 2, \
-\"$datafile\" using (\$1) smooth bezier title \"$TITLE2\" lt 1, \
-$avg title \"average ($avg W)\""
+if [[ $TITLE1 ]];then
+  echo "plot \"$datafile\" using (\$1) with lines title \"$TITLE1\" lt 2, \\"
+else
+  echo "plot \"$datafile\" using (\$1) with lines lt 2, \\"
+fi
+
+if [[ $TITLE2 ]];then
+  echo "\"$datafile\" using (\$1) smooth bezier title \"$TITLE2\" lt 1, \\"
+else
+  echo "\"$datafile\" using (\$1) smooth bezier lt 1, \\"
+fi
+
+if [[ $avg ]];then
+  echo "$avg title \"average ($avg W)\""
+fi
 
 }
 # }}}
@@ -153,10 +166,12 @@ plot() {
   local datafile
   datafile="$@"
   
+  local dir=$(dirname "$datafile")
+  
   [[ "$datafile" ]] || errorout 'please specify a file to read from.'
   [[ -f "$datafile" ]] || errorout 'file not found.'
    
-  avg=$(average "$datafile" | cut -c1-4)
+  local avg=$(average "$datafile" | cut -c1-4)
   
   [[ -d "$TDIR" ]] || mkdir -p "$TDIR"
   makeplotfile > "$PLOTFILE" || errorout 'failed writing plotfile'
