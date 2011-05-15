@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 #
 # twat (thinkwatt):
 # record power consumption, calculate average and create a gnuplot graph
