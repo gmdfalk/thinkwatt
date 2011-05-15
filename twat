@@ -63,17 +63,11 @@ record() {
   [[ "$2" ]] || errorout "you have to specify an output file"
   
   local BAT=/sys/devices/platform/smapi/BAT0
-
-  local output
   
   if [[ -f $2 ]];then
     echo "--------------------------------"
     read -p "Overwrite $2? y/n "
-    if [ "$REPLY" = "y" ]; then
-      output=$2
-    else
-      output=$2.$$
-    fi
+    [[ "$REPLY" = "y" ]] || exit 0      
   fi
   
   local tmpfile
@@ -100,9 +94,10 @@ record() {
   
   [[ -d "$dir" ]] || mkdir -p "$dir"
   
-  mv "$tmpfile" "$output" && echo "succesfully written to $output"
+  mv "$tmpfile" "$2" && echo "succesfully written to $2"
   echo "--------------------------------------------------"
-  echo "average consumption during the last $1 seconds was $(average $output) W"
+  echo "average consumption during the last $1 seconds was $(average $2) W"
+  echo 
 
 }
 # }}}
@@ -156,10 +151,8 @@ plot() {
   [[ -d $TDIR ]] || mkdir -p $TDIR 
   makeplotfile > "$PLOTFILE" || errorout 'failed writing plotfile'
   gnuplot -p "$PLOTFILE"
-  echo 
   echo "------------------------------------------"
-  echo "the gnuplot graph has been created as $PNGFILE"
-  echo "------------------------------------------"
+  echo "graph created as $PNGFILE"
   echo 
 
 }
