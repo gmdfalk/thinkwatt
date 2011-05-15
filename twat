@@ -59,24 +59,30 @@ errorout() { echo "error: $*" >&2; exit 1; }
 # record {{{
 record() {
   
-  [[ "$1" =~ ^[0-9]+$ ]] || errorout "$1 is not a number"
+  [[ "$1" =~ ^[0-9]+$ ]] || errorout "you have to specify a numerical argument for -r."
   [[ "$2" ]] || errorout "you have to specify an output file"
   
   local BAT=/sys/devices/platform/smapi/BAT0
+
+  local output
+  
+  if [[ -f $2 ]];then
+    echo "--------------------------------"
+    read -p "Overwrite $2? y/n "
+    if [ "$REPLY" = "y" ]; then
+      output=$2
+    else
+      output=$2.$$
+    fi
+  fi
   
   local tmpfile
   tmpfile=/tmp/$$.dat
   
-  if [[ -f $2 ]];then
-    echo 
-    echo "$2 already exists. It will be overwritten."
-    echo "You'll be asked to confirm that later by /bin/mv."
-    echo 
-  fi
+  echo "--------------------------------------------------"
+  echo "recording power consumption for the next $1 seconds"
   
   touch "$tmpfile"
-
-  echo "recording power consumption for the next $1 seconds in $2"
   
   for ((i=0; i<=$1; i++));do
     sleep 1
@@ -94,20 +100,21 @@ record() {
   
   [[ -d "$dir" ]] || mkdir -p "$dir"
   
-  mv -i "$tmpfile" "$2"
-  
-  echo 
-  echo "-------------------------------------------------------"
-  echo "average consumption during the last $1 seconds was $(average $2) W"
-  echo "-------------------------------------------------------"
-  echo
+  mv "$tmpfile" "$output" && echo "succesfully written to $output"
+  echo "--------------------------------------------------"
+  echo "average consumption during the last $1 seconds was $(average $output) W"
 
 }
 # }}}
 
 # calculate average {{{
 average() {
-  awk 'BEGIN{s=0;}{s+=($1);}END{print s/NR;}' "$@"
+
+  local datafile
+  datafile="$1"
+  
+  [[ $datafile ]] || errorout 'please specify a file to read from.'
+  awk 'BEGIN{s=0;}{s+=($1);}END{print s/NR;}' "$datafile"
 }
 # }}}
 
@@ -182,7 +189,7 @@ main() {
     record)  record "${args[@]}"	;;
     average) average "${args[@]}"	;;
     plot)    plot "${args[@]}"		;;
-    *)       errorout 'invalid mode'	;;
+    *)       errorout 'invalid mode. use -r, -p or -a.' ;;
   esac
   
 }
