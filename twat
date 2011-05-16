@@ -64,7 +64,9 @@ EOF
 errorout() { echo "error: $*" >&2; exit 1; }
 # }}}
 
+# some early checks for tp_smapi and AC adapter
 [[ $(lsmod | grep smapi) ]] || errorout 'please load the kernel module tp_smapi first.'
+[[ $(grep off-line /proc/acpi/ac_adapter/AC/state) ]] || errorout 'please unplug the ac adapater first'
 
 # record {{{
 record() {
