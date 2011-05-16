@@ -96,6 +96,8 @@ record() {
   # we strip the leading "-" from the data file
   sed -i 's/-//g' "$tmpfile1"
   
+  [[ -d $TDIR ]] || mkdir -p $TDIR
+  
   local tmpfile=$TDIR/$$.dat
   cat "$tmpfile1" | awk '{print $1/1000}' > "$tmpfile"
   
