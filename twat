@@ -3,44 +3,8 @@
 # twat (thinkwatt):
 # record power consumption, calculate average and create a gnuplot graph
 #
-# requires:
-# tp_smapi (kernel module)
-# gnuplot
-#
 # TO-DO:
-# * clean-up function
-# * support for non-thinkpads via /proc/acpi/battery (gotta find the /sys equivalent for that too)
-# * add options for PNG output dir
-# * add option for modifying title, e.g. with twat -t|--title
-# * make output name per default the same as input name (?)
-# * check if AC is plugged in
-
-# plotting variables {{{
-# powerfile - if you use an ultrabay accu and have no main accu plugged in you might need to change BAT0 to BAT1
-# this is also a preparation for non-thinkpad support
-POWERFILE=/sys/devices/platform/smapi/BAT0/power_now
-# information for gnuplot. this is the place where you can rename the x/y-labels on your graph, give the graph a custom title and such
-DATE=$(date +%Y-%m-%d,\ %T)
-TITLE="power consumption of my thinkpad, created by thinkwatt on $DATE"
-XLABEL="sec (seconds)"
-YLABEL="W (Watt)"
-TERMINAL="png"
-# if you'd like custom titles for the graphs, here's where you do it
-#TITLE1="your custom title for line1"
-#TITLE2="for line2"
-#TITLE3="for line 3"
-# if you want to set a specific range for x/y-axis do it below
-#YRANGE="[4000:16000]"
-#XRANGE="[0:2000]"
-
-# use $TDIR to have twat save files in a different directory.
-# twat will save two files:
-# 1) a .plt file (containing plot instructions) in case you want to reuse/modify it
-# 2) a .png file (the plot graphic)
-TDIR="/tmp/thinkwatt"
-PLOTFILE="$TDIR/$$.plt"
-PNGFILE=$$.png
-# }}}
+# * add more options (e.g. for specifying a different gnuplot title or png output)
 
 # utilities {{{
 message() {
@@ -62,27 +26,57 @@ EOF
 }
 
 errorout() { echo "error: $*" >&2; exit 1; }
+
+check_ac() {
+  local acfile=/sys/class/power_supply/AC/online
+  [[ $(cat $acfile) = 0 ]] || errorout 'please unplug the ac adapater first'
+}
 # }}}
 
-# some early checks for tp_smapi and AC adapter
-[[ $(lsmod | grep smapi) ]] || errorout 'please load the kernel module tp_smapi first.'
-[[ $(grep off-line /proc/acpi/ac_adapter/AC/state) ]] || errorout 'please unplug the ac adapater first'
+# plotting variables {{{
+DATE=$(date +%Y-%m-%d,\ %T)
+TITLE="power consumption of my thinkpad, created by thinkwatt on $DATE"
+XLABEL="sec (seconds)"
+YLABEL="W (Watt)"
+TERMINAL="png"
+## some more options for gnuplot, enable them here if you like
+#TITLE1="your custom title for line1"
+#TITLE2="for line2"
+#TITLE3="for line 3"
+#YRANGE="[4000:16000]"
+#XRANGE="[0:2000]"
+
+# use $TDIR to have twat save files in a different directory.
+# twat will save two files:
+# 1) a .plt file (containing plot instructions) in case you want to reuse/modify it
+# 2) a .png file (the plot graphic)
+TDIR="/tmp/thinkwatt"
+PLOTFILE="$TDIR/$$.plt"
+PNGFILE=$(basename $2 .dat).png
+# }}}
 
 # record {{{
 record() {
 
   local seconds="$1"
-  
   local datafile="$2"
   
   [[ "$seconds" =~ ^[0-9]+$ ]] || errorout "please specify the time in seconds."
-  #[[ "$datafile" ]] || errorout 'please specify a file to write to.'
-  
+
+  SMAPI=$(lsmod | grep smapi)
+  if [[ $SMAPI ]];then
+    local powerfile=/sys/devices/platform/smapi/BAT0/power_now
+  else
+    echo "you don't have tp_smapi loaded"
+    echo "if you're using a thinkpad you should modprobe tp_smapi for more accurate readings"
+    local powerfile=/sys/class/power_supply/BAT0/power_now
+  fi
+
   if [[ -f "$datafile" ]];then
     read -p "overwrite $datafile? y/n "
     [[ "$REPLY" = "y" ]] || exit 0
   fi
-
+  
   local tmpfile1=/tmp/$$.dat
   touch "$tmpfile1"
   
@@ -90,15 +84,21 @@ record() {
   
   for ((i=0; i<=$seconds; i++));do
     sleep 1
-    cat "$POWERFILE" >> "$tmpfile1"
+    cat "$powerfile" >> "$tmpfile1"
   done
-
-  # we strip the leading "-" from the data file
-  sed -i 's/-//g' "$tmpfile1"
   
   [[ -d $TDIR ]] || mkdir -p $TDIR
-  
   local tmpfile=$TDIR/$$.dat
+  
+  # file formatting
+  if [[ $SMAPI ]];then
+    # we strip the leading "-" from the data file
+    sed -i 's/-//g' "$tmpfile1"
+  else
+    # strip the trailing last 3 characters
+     sed -i 's/.\{3\}$//' "$tmpfile1"
+  fi
+  # and divide by 1000 to convert from mW to W
   cat "$tmpfile1" | awk '{print $1/1000}' > "$tmpfile"
   
   if [[ $datafile ]];then
@@ -113,6 +113,7 @@ record() {
   else
     local file=$(basename "$tmpfile")
     outputfile="$tmpfile"
+    PNGFILE=$$.png
   fi
   
   echo "average consumption during the last $seconds seconds was $(average $outputfile) W"
@@ -184,10 +185,12 @@ fi
 
 # do the plotting
 plot() {
-
-  [[ -z $(find $(sed 's/:/ /g' <<<$PATH) 2>/dev/null | grep -is gnuplot) ]] && errorout 'you have to install gnuplot first'
+  have_gnuplot=$(find $(sed 's/:/ /g' <<<$PATH) | grep -is gnuplot)
+  [[ $have_gnuplot  ]] || errorout 'you have to install gnuplot first'
  
   local datfile="$@"
+  check_datfile=$(file $datfile | grep ASCII)
+  [[ $check_datfile ]] || errorout "$datfile is not a valid data file"
   
   local dir=$(dirname "$datfile")
   local file=$(basename "$datfile")
@@ -204,8 +207,8 @@ plot() {
   makeplotfile > "$PLOTFILE" || errorout 'failed writing plotfile'
   gnuplot "$PLOTFILE"
 
-  echo "done. you can find the plot file in $TDIR"
-  echo "graph saved in current working directory as $PNGFILE"
+  [[ $tmpfile ]] && echo "plt and dat file saved in $TDIR" || echo "plt file saved in $TDIR"
+  echo "graph saved in your current directory as $PNGFILE"
 
 }
 
@@ -241,4 +244,5 @@ main() {
 # }}}
 
 parse_options "$@"
+check_ac
 main
