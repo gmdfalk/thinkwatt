@@ -21,6 +21,9 @@ options:
 examples:
 	thinkwatt -r 300 /foo/bar/consumption.dat
 	thinkwatt -r 900
+	
+notes:
+	don't use spaces in the path- and filename as it will currently break the script
 EOF
   exit 1
 }
@@ -30,6 +33,10 @@ errorout() { echo "error: $*" >&2; exit 1; }
 check_ac() {
   local acfile=/sys/class/power_supply/AC/online
   [[ $(cat $acfile) = 0 ]] || errorout 'please unplug the ac adapater first'
+}
+check_datafile() {
+  local valid_data=$(file "$@" | grep "^$@: ASCII text$")
+  [[ $valid_data ]] || errorout "$@ is not a valid data file"
 }
 # }}}
 
@@ -131,6 +138,7 @@ average() {
 
   [[ "$@" ]] || errorout 'please specify a file to read from.'
   [[ -f "$@" ]] || errorout 'file not found.'
+  check_datafile "$@"
   
   awk 'BEGIN{s=0;}{s+=($1);}END{print s/NR;}' "$@"
 }
@@ -189,8 +197,7 @@ plot() {
   [[ $have_gnuplot  ]] || errorout 'you have to install gnuplot first'
  
   local datfile="$@"
-  check_datfile=$(file $datfile | grep ASCII)
-  [[ $check_datfile ]] || errorout "$datfile is not a valid data file"
+  check_datafile $datfile
   
   local dir=$(dirname "$datfile")
   local file=$(basename "$datfile")
