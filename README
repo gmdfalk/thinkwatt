@@ -1,4 +1,4 @@
-Thinkwatt is a bash script for use with thinkpad laptops.
+Thinkwatt is a bash script for use with laptops.
 It lets you 
  * record your power consumption,
  * calculate an average of that consumption
@@ -7,21 +7,19 @@ It lets you
 usage:	thinkwatt [ -r <seconds> | -p | -a ] file
 
 options:	
-	-r, --record	start recording the power consumption; optional: specify output file
-			once the file is recorded you'll have the option to directly create a gnuplot graph from it
-	-p, --plot	create a plot image from a data file
-	-a, --average	calculate the average power consumption from a data file
+	-r, --record	the all-in-one argument:
+			will record consumption to a specified (or temporary) file and then create a gnuplot graph from it
+	-p, --plot	create a plot image from a specified data file
+	-a, --average	calculate the average power consumption from a specified data file
 	-h, --help	show this help text
 	
 examples:
-	thinkwatt -r 300 /foo/bar/consumption.dat
-	thinkwatt -r 900
+	thinkwatt -r 300 (will record for 5 minutes to a tmp file)
+	thinkwatt -r 60 /foo/bar/consumption.dat
+	thinkwatt -p /foo/bar/consumption.dat
 	
 notes:
-	don't use spaces in the path- and filenames as it will currently break the script
-	
-Thinkwatt currently *only* works on thinkpads laptops as it requires the kernel module "tp_smapi" to be installed and loaded.
-For the creation of a 2D graph "gnuplot" needs to be installed on the system, too.
+	when using the option -r please avoid spaces in path- and filenames
 
-Update:
-Thinkwatt now works with all laptops, not just Thinkpads. If you're running thinkwatt on a Thinkpad it is still recommended to use tp_smapi as a query to the control files of tp_smapi will produce more accurate results compared to using the generic acpi interface. 
+Thinkwatt works with all laptops, not just Thinkpads.
+If you're running thinkwatt on a Thinkpad it is still recommended to use tp_smapi as a query to the control files of tp_smapi will produce more accurate results than the to the generic acpi interface. 
