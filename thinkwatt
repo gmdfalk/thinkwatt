@@ -97,13 +97,35 @@ record() {
   
   [[ "$seconds" =~ ^[0-9]+$ ]] || errorout "please specify the time in seconds."
   [[ -d "$datafile" ]] && errorout "$datafile is a directory"
+  [[ -d "$TDIR" ]] || mkdir -p "$TDIR" 2>/dev/null || errorout "could not create $TDIR"
+
   if [[ -f "$datafile" ]];then
     read -p "overwrite $datafile? y/n "
     [[ "$REPLY" = "y" ]] || exit 0
   elif [[ -e "$datafile" ]];then
-    echo "$datafile exists and can/should not be written to"
+    errorout "$datafile exists and can/should not be written to"
   fi
-
+  
+  local tmpfile1=/tmp/$$.dat
+  local tmpfile="$TDIR"/$$.dat
+  
+  if [[ "$datafile" ]];then
+    local dir=$(dirname "${datafile}")
+    local file=$(basename "${datafile}")
+    #[[ -w "${dir}" ]] || errorout "you don't have permissions to write to $dir" ## sadly dirname cant cope with spaces
+    [[ -d "${dir}" ]] || mkdir -p "$dir"
+    
+    outputfile="$datafile"
+    [[ "$dir" ]] && TDIR="$dir"
+    PNGFILE="$TDIR"/$(basename "$file" .dat).png
+    #PLOTFILE="$TDIR"/$(basename "$datafile" .dat).plt
+  else
+    [[ -w "$(pwd)" ]] || errorout "you don't have permissions to write to $(pwd)"
+    local file=$(basename "$tmpfile")
+    outputfile="$tmpfile"
+    local istemp=true
+  fi
+  
   SMAPI=$(lsmod | grep -s smapi)
   if [[ "$SMAPI" ]];then
     local powerfile=/sys/devices/platform/smapi/BAT0/power_now
@@ -112,15 +134,11 @@ record() {
     local powerfile=/sys/class/power_supply/BAT0/power_now
   fi
   
-  local tmpfile1=/tmp/$$.dat
   touch "$tmpfile1" || errorout "could not create $tmpfile1"
   trap "rm $tmpfile1" EXIT
   
   # do the actual recording included in countdown()
   countdown "$seconds"
-  
-  [[ -d "$TDIR" ]] || mkdir -p "$TDIR" || errorout "could not create $TDIR"
-  local tmpfile=$TDIR/$$.dat
   
   # file formatting
   if [[ "$SMAPI" ]];then
@@ -132,24 +150,8 @@ record() {
   fi
   # and divide by 1000 to convert from mW to W
   cat "$tmpfile1" | awk '{print $1/1000}' > "$tmpfile"
-  
-  if [[ "$datafile" ]];then
-    local dir=$(dirname "$datafile")
-    local file=$(basename "$datafile")
-
-    [[ -d "$dir" ]] || mkdir -p "$dir"
     
-    outputfile="$datafile"
-    [[ "$dir" ]] && TDIR="$dir"
-    PNGFILE="$TDIR"/$(basename "$file" .dat).png
-    #PLOTFILE="$TDIR"/$(basename "$datafile" .dat).plt
-  
-    mv "$tmpfile" "$datafile"
-  else
-    local file=$(basename "$tmpfile")
-    outputfile="$tmpfile"
-    local istemp=true
-  fi
+  [[ "$datafile" ]] && mv "$tmpfile" "$datafile"
   
   echo average was $(average "$outputfile") W
   
@@ -165,7 +167,7 @@ average() {
   [[ -f "$@" ]] || errorout 'file not found.'
   check_datafile "$@"
   
-  awk 'BEGIN{s=0;}{s+=($1);}END{print s/NR;}' "$@" 2>/dev/null
+  awk 'BEGIN{s=0;}{s+=($1);}END{print s/NR;}' "$@"
   
 }
 # }}}
