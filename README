@@ -16,11 +16,8 @@ options:
 	
 examples:
 	thinkwatt -r 300 (will record for 5 minutes to a tmp file)
-	thinkwatt -r 60 /foo/bar/consumption.dat
-	thinkwatt -p /foo/bar/consumption.dat
-	
-notes:
-	when using the option -r please avoid spaces in path- and filenames
+	thinkwatt -r 60 /foo/bar/consumption.dat (will record to the specified file)
+	thinkwatt -p /foo/bar/consumption.dat (will plot from the specified file)
 
 Thinkwatt works with all laptops, not just Thinkpads.
 If you're running thinkwatt on a Thinkpad it is still recommended to use tp_smapi as a query to the control files of tp_smapi will produce more accurate results than the to the generic acpi interface. 
