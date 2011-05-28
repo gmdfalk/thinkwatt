@@ -5,9 +5,6 @@ Thinkwatt can
  * calculate an average of that consumption
  * and visualize that data in a 2D gnuplot graphic.
  
-usage:	thinkwatt -r (seconds) (-q) (-o file)
-	thinkwatt [ -p | -a ] (-q) file
-
 options:	
 	-r, --record	record power consumption and optionally create a graph from the gathered data
 	-p, --plot	create a plot image from a specified data file
