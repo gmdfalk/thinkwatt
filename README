@@ -19,4 +19,4 @@ examples:
 	thinkwatt -p /foo/bar/consumption.dat (will create a graph from the specified file)
 
 Thinkwatt works with all laptops, not just Thinkpads.
-If you're running thinkwatt on a Thinkpad it is still recommended to use tp_smapi as a query to the control files of tp_smapi will produce more accurate results than the to the generic acpi interface. 
+If you're running thinkwatt on a Thinkpad it is still recommended to use tp_smapi as it provides more accurate results than the generic acpi.
