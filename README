@@ -1,4 +1,4 @@
-Thinkwatt is a bash script for use with thinkpad laptops. However, as of recently, it works with all kinds of laptops as long as they've got a battery attached.
+Thinkwatt is a bash script for use with thinkpad laptops. However, as of v0.2, it works with all kinds of laptops as long as they've got a battery attached.
 
 Thinkwatt can
  * record your power consumption,
