@@ -5,23 +5,26 @@
 #
 # TO-DO:
 # * add more options (e.g. for specifying a different gnuplot title or png output)
+# * allow time input in minutes and hours
 
 # utilities {{{
 message() {
   cat << EOF
-usage:	thinkwatt [ -r <seconds> | -p | -a ] file
+usage:	thinkwatt -r (seconds) (-q) (-o file)
+	thinkwatt [ -p | -a ] (-q) file
 
 options:	
-	-r, --record	the all-in-one argument:
-			will record consumption to a specified (or temporary) file and then create a gnuplot graph from it
+	-r, --record	record power consumption and optionally create a graph from the gathered data
 	-p, --plot	create a plot image from a specified data file
 	-a, --average	calculate the average power consumption from a specified data file
+	-q, --quiet	makes thinkwatt less chatty
+	-o, --output	the output file. can be prepended by a path.
 	-h, --help	show this help text
 	
 examples:
-	thinkwatt -r 300 (will record for 5 minutes to a tmp file)
-	thinkwatt -r 60 /foo/bar/consumption.dat (will record to the specified file)
-	thinkwatt -p /foo/bar/consumption.dat (will plot from the specified file)
+	thinkwatt -r (will record to a temp file until cancelled)
+	thinkwatt -r 300 -o /foo/bar/consumption.dat (will record for 5 minutes to the specified file)
+	thinkwatt -p /foo/bar/consumption.dat (will create a graph from the specified file)
 EOF
   exit 1
 }
@@ -40,17 +43,30 @@ check_datafile() {
   [[ "$valid_data" ]] || errorout "$@ does not contain valid data"
 }
 countdown() {
-  secs="$1"
-  while [ "$secs" -gt 0 ]
-  do
-    [[ "$die" == yes ]] && return 0
-    sleep 1 &
-    cat "$powerfile" >> "$tmpfile1"
-    printf "\r%02d/$seconds seconds left" $((secs))
-    secs=$(( $secs - 1 ))
-    wait
-  done
-  echo
+  if [[ "$seconds" =~ ^[0-9]+$ ]];then
+    # count down
+    secs="$seconds"
+    while [ "$secs" -gt 0 ];do
+      [[ "$die" == yes ]] && return 0
+      sleep 1 &
+      cat "$powerfile" >> "$tmpfile1"
+      printf "\rrecording (%02d/$seconds)" $((secs))
+      secs=$(( $secs - 1 ))
+      wait
+    done
+  else
+    # count up
+    secs=1
+    while true;do
+      [[ "$die" == yes ]] && return 0
+      sleep 1 &
+      cat "$powerfile" >> "$tmpfile1"
+      printf "\rrecording ($secs)"
+      secs=$(( $secs + 1 ))
+      wait
+    done
+  fi
+  echo 
 }
 # if we abort the recording process with ctrl+c this will give the option to plot the already recorded data
 trap ctrl_c INT
@@ -61,26 +77,7 @@ function ctrl_c() {
 }
 # }}}
 
-# plotting variables {{{
-DATE=$(date +%Y-%m-%d,\ %T)
-TITLE="power consumption of my laptop, created by thinkwatt on $DATE"
-XLABEL="sec (seconds)"
-YLABEL="W (Watt)"
-TERMINAL="png"
-GRID=yes
-
-## some more options for gnuplot, enable and modify them here if you like
-MYTICS=2
-MXTICS=2
-#YTICS=1
-#XTICS=(better leave this alone)
-GRIDSET="mytics"
-#TITLE1="your custom title for line1"
-#TITLE2="your custom title for line2"
-#TITLE3="your custom title for line3"
-#YRANGE="[4000:16000]"
-#XRANGE="[0:2000]"
-
+# default output dir and png file {{{
 # use $TDIR to have thinkwatt save files in a different directory.
 # thinkwatt will save two files:
 # 1) a .plt file (containing plot instructions) in case you want to reuse/modify it
@@ -92,33 +89,32 @@ PLOTFILE="$TDIR"/$$.plt
 # record {{{
 record() {
 
-  local seconds="$1"; shift
-  local datafile="$@"
+  local seconds="$1"
   
-  [[ "$seconds" =~ ^[0-9]+$ ]] || errorout "please specify the time in seconds."
-  [[ -d "$datafile" ]] && errorout "$datafile is a directory"
+  #[[ "$seconds" =~ ^[0-9]+$ ]] || errorout 'please specify the time in seconds"
+  [[ -d "$output" ]] && errorout "$output is a directory"
   [[ -d "$TDIR" ]] || mkdir -p "$TDIR" 2>/dev/null || errorout "could not create $TDIR"
 
-  if [[ -f "$datafile" ]];then
-    read -p "overwrite $datafile? y/n "
+  if [[ -f "$output" ]];then
+    read -p "overwrite $output? y/n "
     [[ "$REPLY" = "y" ]] || exit 0
-  elif [[ -e "$datafile" ]];then
-    errorout "$datafile exists and can/should not be written to"
+  elif [[ -e "$output" ]];then
+    errorout "$output exists and can/should not be written to"
   fi
   
   local tmpfile1=/tmp/$$.dat
   local tmpfile="$TDIR"/$$.dat
-  
-  if [[ "$datafile" ]];then
-    local dir=$(dirname "${datafile}")
-    local file=$(basename "${datafile}")
-    #[[ -w "${dir}" ]] || errorout "you don't have permissions to write to $dir" ## sadly dirname cant cope with spaces
-    [[ -d "${dir}" ]] || mkdir -p "$dir"
+
+  if [[ "$output" ]];then
+    local dir=$(dirname "$output")
+    local file=$(basename "$output")
+    [[ -d "$dir" ]] || mkdir -p "$dir"
+    [[ -w "$dir" ]] || errorout "you don't have permissions to write to $dir"
     
-    outputfile="$datafile"
+    outputfile="$output"
     [[ "$dir" ]] && TDIR="$dir"
     PNGFILE="$TDIR"/$(basename "$file" .dat).png
-    #PLOTFILE="$TDIR"/$(basename "$datafile" .dat).plt
+    #PLOTFILE="$TDIR"/$(basename "$output" .dat).plt
   else
     [[ -w "$(pwd)" ]] || errorout "you don't have permissions to write to $(pwd)"
     local file=$(basename "$tmpfile")
@@ -126,7 +122,7 @@ record() {
     local istemp=true
   fi
   
-  SMAPI=$(lsmod | grep -s smapi)
+  SMAPI=$(lsmod | grep -s tp_smapi)
   if [[ "$SMAPI" ]];then
     local powerfile=/sys/devices/platform/smapi/BAT0/power_now
   else
@@ -138,7 +134,7 @@ record() {
   trap "rm $tmpfile1" EXIT
   
   # do the actual recording included in countdown()
-  countdown "$seconds"
+  countdown
   
   # file formatting
   if [[ "$SMAPI" ]];then
@@ -151,9 +147,9 @@ record() {
   # and divide by 1000 to convert from mW to W
   cat "$tmpfile1" | awk '{print $1/1000}' > "$tmpfile"
     
-  [[ "$datafile" ]] && mv "$tmpfile" "$datafile"
+  [[ "$output" ]] && mv "$tmpfile" "$output"
   
-  echo average was $(average "$outputfile") W
+  [[ "$quiet" ]] || echo average was $(average "$outputfile") W
   
   plot "$outputfile"
 
@@ -197,22 +193,22 @@ EOF
 
   echo 
   if [[ "$TITLE1" ]];then
-    echo "plot \"$datfile\" using (\$1) with lines title \"$TITLE1\" lt 2, \\"
+    echo "plot \"$datafile\" using (\$1) with lines title \"$TITLE1\" lt 2, \\"
   else
-    echo "plot \"$datfile\" using (\$1) with lines lt 2, \\"
+    echo "plot \"$datafile\" using (\$1) with lines lt 2, \\"
   fi
 
   if [[ "$TITLE2" ]];then
     if [[ "$avg" ]];then
-      echo "\"$datfile\" using (\$1) smooth bezier title \"$TITLE2\" lt 1, \\"
+      echo "\"$datafile\" using (\$1) smooth bezier title \"$TITLE2\" lt 1, \\"
     else
-      echo "\"$datfile\" using (\$1) smooth bezier title \"$TITLE2\" lt 1"
+      echo "\"$datafile\" using (\$1) smooth bezier title \"$TITLE2\" lt 1"
     fi
   else
     if [[ "$avg" ]];then
-      echo "\"$datfile\" using (\$1) smooth bezier lt 1, \\"
+      echo "\"$datafile\" using (\$1) smooth bezier lt 1, \\"
     else
-      echo "\"$datfile\" using (\$1) smooth bezier lt 1"
+      echo "\"$datafile\" using (\$1) smooth bezier lt 1"
     fi
   fi
 
@@ -228,26 +224,44 @@ plot() {
   have_gnuplot=$(find $(sed 's/:/ /g' <<<$PATH) 2>/dev/null | grep -is gnuplot)
   [[ "$have_gnuplot"  ]] || errorout 'please install gnuplot first'
   [[ -d "$TDIR" ]] || mkdir -p "$TDIR" || errorout "could not create $TDIR"
-  
+
   # is input file a valid data file?
-  local datfile="$@"
-  check_datafile "$datfile"
-  [[ "$datfile" ]] || errorout 'please specify a file to read from.'
-  [[ -f "$datfile" ]] || errorout 'filplotfilee not found.'
+  local datafile="$@"
+  check_datafile "$datafile"
+  [[ "$datafile" ]] || errorout 'please specify a file to read from.'
+  [[ -f "$datafile" ]] || errorout 'filplotfilee not found.'
    
   # define some of the variables for the plot file
-  local avg=$(average "$datfile" | cut -c1-4)
-  local dir=$(dirname "$datfile")
-  local file=$(basename "$datfile")
+  DATE=$(date +%Y-%m-%d,\ %T)
+  TITLE="power consumption of my laptop, created by thinkwatt on $DATE"
+  XLABEL="sec (seconds)"
+  YLABEL="W (Watt)"
+  TERMINAL="png"
+  GRID=yes
+  #TITLE1="your custom title for line1"
+  #TITLE2="your custom title for line2"
+  #TITLE3="your custom title for line3"
+  # some more options for gnuplot, enable and modify them here if you like
+  MYTICS=2
+  MXTICS=2
+  #YTICS=1
+  #XTICS=(better leave this alone)
+  GRIDSET="mytics"
+  #YRANGE="[4000:16000]"
+  #XRANGE="[0:2000]"
+  # moar
+  local avg=$(average "$datafile" | cut -c1-4)
+  local dir=$(dirname "$datafile")
+  local file=$(basename "$datafile")
   [[ -z "$TITLE1" ]] && local TITLE1="$file (actual)"
   [[ -z "$TITLE2" ]] && local TITLE2="$file (trend)"
-  [[ "$PNGFILE" ]] || PNGFILE=$(basename "$datfile" .dat).png
+  [[ "$PNGFILE" ]] || PNGFILE=$(basename "$datafile" .dat).png
   
   # now we can plot   
   makeplotfile > "$PLOTFILE" || errorout "could not write the plotfile (permission issue?)"
   gnuplot "$PLOTFILE" || errorout "could now write graph (permission issue?)"
 
-  echo "graph saved as $PNGFILE"
+  [[ "$quiet" ]] || echo "graph saved as $PNGFILE"
 
 }
 
@@ -256,12 +270,14 @@ parse_options() {
 
   [[ -z "$1" ]] && message
 
-  while [[ -n "$1" ]]; do
+  while [[ -n "$1" ]];do
     case "$1" in
+      -h|--help)    message		;;
+      -q|--quiet)   quiet=true		;;
+      -o|--output)  output="$2"		;;
       -r|--record)  mode='record'	;;
       -p|--plot)    mode='plot'		;;
       -a|--average) mode='average'	;;
-      -h|--help)    message		;;
       *)            args+=( "$1" )	;;
     esac
     shift

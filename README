@@ -5,19 +5,21 @@ Thinkwatt can
  * calculate an average of that consumption
  * and visualize that data in a 2D gnuplot graphic.
  
-usage:	thinkwatt [ -r <seconds> | -p | -a ] file
+usage:	thinkwatt -r (seconds) (-q) (-o file)
+	thinkwatt [ -p | -a ] (-q) file
 
 options:	
-	-r, --record	the all-in-one argument:
-			will record consumption to a specified (or temporary) file and then create a gnuplot graph from it
+	-r, --record	record power consumption and optionally create a graph from the gathered data
 	-p, --plot	create a plot image from a specified data file
 	-a, --average	calculate the average power consumption from a specified data file
+	-q, --quiet	makes thinkwatt less chatty
+	-o, --output	the output file. can be prepended by a path.
 	-h, --help	show this help text
 	
 examples:
-	thinkwatt -r 300 (will record for 5 minutes to a tmp file)
-	thinkwatt -r 60 /foo/bar/consumption.dat (will record to the specified file)
-	thinkwatt -p /foo/bar/consumption.dat (will plot from the specified file)
+	thinkwatt -r (will record to a temp file until cancelled)
+	thinkwatt -r 300 -o /foo/bar/consumption.dat (will record for 5 minutes to the specified file)
+	thinkwatt -p /foo/bar/consumption.dat (will create a graph from the specified file)
 
 Thinkwatt works with all laptops, not just Thinkpads.
 If you're running thinkwatt on a Thinkpad it is still recommended to use tp_smapi as a query to the control files of tp_smapi will produce more accurate results than the to the generic acpi interface. 
