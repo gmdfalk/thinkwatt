@@ -11,10 +11,11 @@ options:
 	-a, --average	calculate the average power consumption from a specified data file
 	-q, --quiet	makes thinkwatt less chatty
 	-o, --output	the output file. can be prepended by a path.
+	-f, --force	ignores the AC status. output0 may be useless, as power draw is zero until plugged out (avg is reduced as well)
 	-h, --help	show this help text
 	
 examples:
-	thinkwatt -r (will record to a temp file until cancelled)
+	thinkwatt -r -f (will record to a temp file until cancelled, you may record the very events happening at AC removal)
 	thinkwatt -r 300 -o /foo/bar/consumption.dat (will record for 5 minutes to the specified file)
 	thinkwatt -p /foo/bar/consumption.dat (will create a graph from the specified file)
 
