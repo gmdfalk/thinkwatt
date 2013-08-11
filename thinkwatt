@@ -123,7 +123,7 @@ function ctrl_c() {
 # thinkwatt will save two files:
 # 1) a .plt file (containing plot instructions) in case you want to reuse/modify it
 # 2) a .png file (the plot graphic)
-TDIR="/tmp/thinkwatt"
+TDIR="$HOME/.thinkwatt"
 PLOTFILE="$TDIR"/$(date '+%Y-%m-%d-%T').plt
 # }}}
 
