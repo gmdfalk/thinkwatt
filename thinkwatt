@@ -159,14 +159,14 @@ record() {
     local dir=$(dirname "$output0")
     local file=$(basename "$output0")
     [[ -d "$dir" ]] || mkdir -p "$dir"
-    [[ -w "$dir" ]] || errorout "you don't have permissions to write to $dir"
+    [[ -w "$dir" ]] || errorout "you don't have permissions to write $output0 to $dir"
     
     outputfile0="$output0"
     [[ "$dir" ]] && TDIR="$dir"
     PNGFILE="$TDIR"/$(basename "$file" .dat)-0.png
     #PLOTFILE="$TDIR"/$(basename "$output0" .dat).plt
   else
-    [[ -w "$(pwd)" ]] || errorout "you don't have permissions to write to $(pwd)"
+    [[ -w "$TDIR" ]] || errorout "you don't have permissions to write $output0 to $TDIR"
     local file=$(basename "$tmpfile0")
     outputfile0="$tmpfile0"
     local istemp0=true
@@ -176,14 +176,14 @@ record() {
     local dir=$(dirname "$output1")
     local file=$(basename "$output1")
     [[ -d "$dir" ]] || mkdir -p "$dir"
-    [[ -w "$dir" ]] || errorout "you don't have permissions to write to $dir"
+    [[ -w "$dir" ]] || errorout "you don't have permissions to write $output1 to $dir"
     
     outputfile1="$output1"
     [[ "$dir" ]] && TDIR="$dir"
     PNGFILE="$TDIR"/$(basename "$file" .dat)-1.png
     #PLOTFILE="$TDIR"/$(basename "$output0" .dat).plt
   else
-    [[ -w "$(pwd)" ]] || errorout "you don't have permissions to write to $(pwd)"
+    [[ -w "$TDIR" ]] || errorout "you don't have permissions to write $outputfile1 to $TDIR"
     local file=$(basename "$tmpfile1")
     outputfile1="$tmpfile1"
     local istemp1=true
@@ -260,7 +260,7 @@ set title "$TITLE"
 set xlabel "$XLABEL"
 set ylabel "$YLABEL"
 set terminal $TERMINAL size $SIZE
-set output "$PNGFILE"
+set output "$TDIR/$PNGFILE"
 EOF
   [[ "$YRANGE" ]] && echo "set yrange $YRANGE"
   [[ "$XRANGE" ]] && echo "set yrange $YRANGE"
