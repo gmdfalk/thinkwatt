@@ -32,8 +32,8 @@ EOF
 errorout() { echo "error: $*" >&2; exit 1; }
 
 check_ac() {
-  local acfile=/sys/class/power_supply/AC/online
-  [[ $(cat "$acfile") = 0 ]] || errorout 'please unplug the ac adapater first'
+  [[ "$quiet" ]] && return 0
+  [[  $(cat /sys/class/power_supply/*/online) = 0 ]] || echo 'it seems your AC adapter is plugged in'
 }
 check_datafile() {
   [[ -f "$@" ]] || errorout "$@ does not exist"
@@ -43,6 +43,7 @@ check_datafile() {
   [[ "$valid_data" ]] || errorout "$@ does not contain valid data"
 }
 countdown() {
+  [[ "$quiet" ]] || echo "ctrl+c to plot/exit"
   if [[ "$seconds" =~ ^[0-9]+$ ]];then
     # count down
     secs="$seconds"
@@ -66,13 +67,13 @@ countdown() {
       wait
     done
   fi
-  echo 
+  echo
 }
 # if we abort the recording process with ctrl+c this will give the option to plot the already recorded data
 trap ctrl_c INT
 function ctrl_c() {
   echo
-  read -p "plot already recorded data before exiting? y/n "
+  read -p "plot data? y/n "
   [[ "$REPLY" = "y" ]] && die=yes || exit 0
 }
 # }}}
@@ -126,7 +127,7 @@ record() {
   if [[ "$SMAPI" ]];then
     local powerfile=/sys/devices/platform/smapi/BAT0/power_now
   else
-    echo "for more accurate results use tp_smapi"
+    echo "for more accurate results with thinkpads use tp_smapi"
     local powerfile=/sys/class/power_supply/BAT0/power_now
   fi
   
