@@ -1,3 +1,6 @@
+# thinkwatt
+ 
+## Overview
 Thinkwatt is a bash script for use with thinkpad laptops.  
 However, as of v0.2, it works with all kinds of laptops as long as they've got a battery attached.  
   
@@ -6,6 +9,7 @@ Thinkwatt can
  * calculate an average of that consumption  
  * and visualize that data in a 2D gnuplot graphic.  
 
+## Usage
 ```
 usage:  thinkwatt -r <seconds> [-o <file>] [-f] [-q]  
         thinkwatt <-p | -a>  <file> [-q]  
@@ -27,3 +31,7 @@ examples:
 
 Thinkwatt works with all laptops, not just Thinkpads.  
 If you're running thinkwatt on a Thinkpad it is still recommended to use tp_smapi as it provides more accurate results than the generic acpi.  
+
+ 
+## Screenshot
+![ScreenShot](example_datafile.png) 
